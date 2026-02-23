@@ -1,5 +1,4 @@
 build/
 dist/
-*.png
 *.spec
 output.png
