@@ -1,5 +1,5 @@
-# AquaSuite - to SteelSeries Engine APEX Pro LCD
-This project demonstrates how to display telemetry data from the AquaSuite Software of your PC water cooling system on your APEX Pro keyboard. Note that it is meant as technology demonstrator only, the telemetry endpoints are hard-coded, so is the path to the JSON export.
+# AquaSuite to SteelSeries Engine APEX Pro LCD
+This project demonstrates how to display telemetry data from the AquaSuite software of your PC water cooling system on your APEX Pro keyboard. Note that it is meant as technology demonstrator only, the telemetry endpoints are hard-coded, and so is the path to the JSON export.
 
 
 ## 1. Overview
@@ -10,11 +10,11 @@ Putting an extra display, such as one of the VISION, on the desk, was also a no-
 I decided to use the APEX Pro keyboard's OLED instead, because it is in view already, and they offer a JSON-API to display data there.
 
 At the end of the day, it will look like this:
-* Temperature  display  
+* Temperature  display (icons for both low and high temperature available)  
   ![Temperature display](img/temperature-gauge.png)
-* Flow-Meter (sensore setup required!)  
+* Flow-Meter (sensor setup required!)  
   ![Flow Meter](img/flow-meter.png)
-* Cooling power (sensor setup required!)  
+* Cooling power dissipation (sensor setup required!)  
   ![Cooling Power](img/cooling-power.png)
 
 ## 2. Prerequisites
@@ -22,7 +22,7 @@ Some hardware is required for this script to work and run properly.
 * An [aquacomputer water cooling](https://shop.aquacomputer.de/Wasserkuehlung:::7.html) system with at least:
   * a flow sensor (dedicated or calculated by the pump),
   * a fan controller,
-  * and a temperature sensor, preferrably after the heat sources.
+  * and temperature sensors to get the highest temperature difference in the loop.
 * A [SteelSeries APEX Pro](https://steelseries.com/de-de/gaming-keyboards/apex-pro-gen-3?keyboardSize=fullSize&connectivityType=wired&keyboardLanguage=english&color=black) keyboard with a 128x40 pixel OLED screen. I tested the APEX Pro and the APEX Pro Gen 3.
 
 > [!NOTE] 
@@ -34,13 +34,15 @@ You need to install and configure several things until the data is displayed.
 ### 2.1 AquaSuite Sensor Setup
 First, make sure that you have the sensor data available that you want to display. Here's my setup, yours might be different.
 
-#### 2.1.1 Temperature Sensor
+#### 2.1.1 Temperature Sensors
 As my HighFlow sensor is placed *after* CPU and GPU, and *before* any radiators, I use its sensor for the cooleant's return temperature ("Rücklauf") value in `°C`.
 
-#### 2.1.2 Flow Meter Sensor
-Also, my HighFlow sensor is used to meassure the flow in `l/h` directly. In case you don't have one, you could also use the estimation from your D5 next pump, after configuring and calibrating it through the AquaSuite Software.
+To measure the lowest temperature ("Vorlauf"), I have an additional sensor in the loop *after* the radiators, and *before* the CPU.
 
-#### 2.1.3 Cooling Power [Software] Sensor 
+#### 2.1.2 Flow Meter Sensor
+Also, my HighFlow sensor is used to measure the flow in `l/h` directly. In case you don't have one, you could also use the estimation from your D5 next pump, after configuring and calibrating it through the AquaSuite Software.
+
+#### 2.1.3 Cooling Power Dissipation [Software] Sensor 
 For this value, I use the Playground function to create a software sensor that calculates the cooling power in `W`, and it needs a temperature sensor on the coolest point (in my case this is an analogue temperature sensor wrapped around the output terminal of the last radiator), and at the hottest point (e.g., right after the CPU/GPU combo). In my case, it's the water temperature sensor of the HighFlow component.
 
 The software sensor then looks like this:
@@ -52,8 +54,8 @@ There are two constants defined, values as follows:
 * `Faktor`: `860.0000` (this one calculates the power dissipation in `W`)
 
 > [!NOTE]
-> Of course, in case you have the wired external hardwware temperature sensor connected to the HighFlow sensor, **and** in case it is placed directly before any heat source (ideally after the radiators to get the lowest temperature of the loop), you can use the power value from the sensor directly.  
-It unfortunately does not support an external data source for this value.
+> Of course, in case you have the wired external hardware temperature sensor connected to the HighFlow sensor, **and** in case it is placed directly before any heat source (ideally after the radiators to get the lowest temperature of the loop), you can use the power value from the sensor directly.  
+The HighFlow Next unfortunately does not support an external data source for this value, and according to AquaComputer, it will not be possible to transfer data via USB into the sensor `\(°-°)/`.
 
 #### 2.1.4 Fans Power Sensors
 This is easy - as I have four fan groups, I simply use their respective output power from the Quattro fan controller to have values for the fan power bars on the right.
@@ -75,18 +77,45 @@ This is easy - as I have four fan groups, I simply use their respective output p
 It should look something like this:
 ![Cooling Power](img/data-export-config.png)
 
-### 2.3 AquaSuite Log Export
+### 2.3 Data Mapping
 Lastly, the mapping between the JSON path of the data and the variables here in the script needs to be adapted. Have a look at the exported JSON file and take note of the `DataSourcePath` elements in each exported sensor node.
 
 Those are required to match the expected data for the screen image creation.
 
-You need to modify the filter lines around line `285` and below to adapt the mapping to your output. I left mine in there to show some examples.
+You need to modify the filter lines around line `306` and below to adapt the mapping to your output. I left mine in there to show some examples.
 
 Some notes regarding the bar output of the fans:
 * The code is designed to display 1-4 fans.
 * The bars will start to be drawn from the right.
 * Therefore, if you have less than 4 fans or fan groups, just remove the mapping(s) not required.
 * Also make sure to reference a sensor yielding a percentage value between `0` and `100`.
+
+Here is an example listing for the `c:\Windows\Temp\AquaSuiteExport.json`:
+```json
+{
+  "Name": "AquaSuiteExport",
+  "ExportTime": "2026-02-24T12:35:51.1843641+01:00",
+  "Logdata": [
+    {
+      "time": "2026-02-24T11:35:50.998",
+      "t": "2026-02-24T11:35:50.998",
+      "value": 26.74,
+      "name": "Wasser Vorlauf",
+      "unit": "\u00B0C",
+      "valueType": "TEMPERATURE_C",
+      "device": "QUADRO",
+      "DataSourcePath": "quadro:1305159824:data\\temperatures\\3"
+    },
+  [...]
+}
+```
+It is the low temperature sensor. In `main.py`, we therefore need to put the value `quadro:1305159824:data\\temperatures\\3` of `DataSourcePath` into the part for the `temp_low` part of the loop like so:
+```python
+# line 306
+        for value in systemData['Logdata']:
+            if value.get("DataSourcePath") == 'quadro:1305159824:data\\temperatures\\3':
+                temp_low = value.get("value", 0)
+```
 
 ## Usage
 Simply execute the main program with `py .\main.py`.
